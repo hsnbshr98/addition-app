@@ -7,3 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "Hello World"
+      # Add this step to debug
+      - name: Debug SSH
+        run: |
+          echo "Testing connection to: ${{ secrets.EC2_HOST }}"
+          ssh-keyscan ${{ secrets.EC2_HOST }} || echo "Host key scan failed"
