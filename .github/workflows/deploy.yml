@@ -1,134 +1,41 @@
-name: Ì∫Ä Deploy to AWS EC2
+name: Deploy to EC2
 
 on:
   push:
-    branches: [ main, master ]
-  workflow_dispatch:  # Allows manual trigger from GitHub UI
+    branches:
+      - master
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    name: Ì∫Ä Deploy to EC2
     steps:
-      - name: Ì≥¶ Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Ì¥ß Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.5
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: '**/package-lock.json'
-
-      - name: Ì≥ù Debug Info
-        run: |
-          echo "Deploying to: ${{ secrets.EC2_HOST }}"
-          echo "Branch: ${{ github.ref }}"
-          echo "Commit: ${{ github.sha }}"
-
-      - name: Ì¥ê Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
-          chmod 600 ~/.ssh/ec2_key
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Ì∂•Ô∏è Test SSH Connection
-        run: |
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} "echo '‚úÖ SSH connection successful!' && hostname"
-
-      - name: Ì∫Ä Deploy Application
-        run: |
-          ssh -i ~/.ssh/ec2_key ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
-          set -e  # Exit on error
-          
-          echo "========================================="
-          echo "Ì∫Ä GitHub Actions Deployment Started"
-          echo "========================================="
-          echo "Deployment Time: $(date)"
-          echo "Commit: ${{ github.sha }}"
-          echo "Branch: ${{ github.ref }}"
-          
-          # Set variables
-          APP_DIR="/home/ubuntu/addition-app"
-          BACKUP_DIR="/home/ubuntu/deploy-backups"
-          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-          
-          # Create backup
-          echo "Ì≥¶ Creating backup..."
-          mkdir -p $BACKUP_DIR
-          tar -czf $BACKUP_DIR/backup_$TIMESTAMP.tar.gz -C /home/ubuntu addition-app 2>/dev/null || true
-          
-          # Navigate to app
-          echo "Ì≥Å Navigating to: $APP_DIR"
-          cd $APP_DIR || { echo "‚ùå App directory not found!"; exit 1; }
-          
-          # Pull latest code
-          echo "Ì¥Ñ Pulling latest code from GitHub..."
-          git fetch origin
-          git reset --hard origin/main
-          
-          echo ""
-          echo "Ì¥ß Backend Setup"
-          echo "----------------"
-          cd backend
-          echo "Installing backend dependencies..."
-          npm ci --only=production  # Clean install for production
-          
-          echo ""
-          echo "Ìæ® Frontend Setup"
-          echo "-----------------"
-          cd ../frontend
-          echo "Cleaning old build..."
-          rm -rf build 2>/dev/null || true
-          
-          echo "Installing frontend dependencies..."
-          npm ci --only=production
-          
-          echo "Building frontend..."
-          npm run build
-          
-          # Fix permissions for Nginx
-          echo "Ì¥í Setting permissions..."
-          sudo chown -R ubuntu:www-data /home/ubuntu/addition-app/frontend/build
-          sudo chmod -R 755 /home/ubuntu/addition-app/frontend/build
-          
-          echo ""
-          echo "Ì¥Ñ Restarting Services"
-          echo "----------------------"
-          cd ../backend
-          echo "Restarting backend with PM2..."
-          pm2 restart addition-backend 2>/dev/null || pm2 start server.js --name "addition-backend"
-          
-          echo ""
-          echo "Ì≥ä Verification"
-          echo "---------------"
-          echo "Waiting for backend to start..."
-          sleep 8
-          
-          echo "Checking backend health..."
-          if curl -f http://localhost:5000/api/health; then
-              echo "‚úÖ Backend health check PASSED"
-          else
-              echo "‚ùå Backend health check FAILED"
-              echo "Attempting rollback..."
-              # Rollback from backup
-              rm -rf $APP_DIR
-              tar -xzf $BACKUP_DIR/backup_$TIMESTAMP.tar.gz -C /home/ubuntu
-              cd $APP_DIR/backend
-              pm2 restart addition-backend
-              echo "Ì¥Ñ Rollback completed"
-              exit 1
-          fi
-          
-          echo ""
-          echo "‚úÖ Deployment completed successfully!"
-          echo "========================================="
-          echo "Your app is live at: http://$(curl -s ifconfig.me)"
-          EOF
-          
-      - name: Ì≥® Send Notification
-        if: success()
-        run: |
-          echo "‚úÖ Deployment completed successfully!"
-          echo "View your app at: http://${{ secrets.EC2_HOST }}"
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Update code
+            cd /home/ubuntu/addition-app
+            git pull origin master
+            
+            # Backend
+            cd backend
+            npm install
+            
+            # Frontend
+            cd ../frontend
+            npm install
+            npm run build
+            
+            # Fix permissions
+            sudo chown -R ubuntu:www-data /home/ubuntu/addition-app/frontend/build
+            sudo chmod -R 755 /home/ubuntu/addition-app/frontend/build
+            
+            # Restart
+            cd ../backend
+            pm2 restart addition-backend || pm2 start server.js --name addition-backend
