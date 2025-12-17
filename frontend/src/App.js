@@ -40,7 +40,7 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Simple Addition Calculator For Beginners</h1>
+        <h1>Simple Addition Calculator For Beginners Part 2</h1>
         <p>Add two numbers together</p>
         
         <form onSubmit={handleSubmit} className="calculator-form">
