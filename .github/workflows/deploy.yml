@@ -3,7 +3,7 @@ name: Deploy to EC2
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   deploy:
@@ -21,7 +21,7 @@ jobs:
           script: |
             # Update code
             cd /home/ubuntu/addition-app
-            git pull origin master
+            git pull origin main
             
             # Backend
             cd backend
